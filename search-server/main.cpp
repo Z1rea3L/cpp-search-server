@@ -80,15 +80,9 @@ public:
     }
 
 private:
-
     map<string, map<int, double>> word_to_document_freqs_;
     set<string> stop_words_;
     int document_count_ = 0;
-
-    struct Query {
-        set<string> plus_query;
-        set<string> minus_query;
-    };
 
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
@@ -104,31 +98,52 @@ private:
         return words;
     }
 
+    struct Query {
+        set<string> plus_query;
+        set<string> minus_query;
+    };
+    
+    struct QueryPlusOrMinus {
+        string word;
+        bool is_minus;
+    };
+    
     Query ParseQuery(const string& text) const {
         set<string> query_words;
         Query query;
         for (const string& word : SplitIntoWordsNoStop(text)) {
-            if(word[0]=='-'){
-                string str = word;
-                str.erase(0,1);
-                query.minus_query.insert(str);
+            const QueryPlusOrMinus query_word = ParseQueryWord(word);
+            if(query_word.is_minus){
+                query.minus_query.insert(query_word.word);
             }
-            else query.plus_query.insert(word);
+            else query.plus_query.insert(query_word.word);
         }
         return query;
+    }
+    
+    QueryPlusOrMinus ParseQueryWord(string word) const {
+        bool is_minus = false;
+        if (word[0] == '-') {
+            word = word.substr(1);
+            is_minus = true;
+        }
+        return {word,is_minus};
+    }
+
+    double CalcIdf(const string& word) const {
+        return log(document_count_*1.0 / word_to_document_freqs_.at(word).size());
     }
 
     vector<Document> FindAllDocuments(const Query& query) const {
         vector<Document> matched_documents;
         map<int, double> document_to_relevance;
-        
-        
+
         if(query.plus_query.size()!=0){
             for(const string& word : query.plus_query){
                 if(word_to_document_freqs_.count(word)==0){
                     continue;
                 }
-                const double idf = log(document_count_ / (word_to_document_freqs_.at(word).size()*1.0));
+                const double idf = CalcIdf(word);
                 for(const auto& [id, tf] : word_to_document_freqs_.at(word)){
                     document_to_relevance[id] += tf * idf;
                 }
@@ -165,9 +180,8 @@ SearchServer CreateSearchServer() {
 }
 
 int main() {
-
+    
     const SearchServer search_server = CreateSearchServer();
-
     const string query = ReadLine();
     for (const auto& [document_id, relevance] : search_server.FindTopDocuments(query)) {
         cout << "{ document_id = "s << document_id << ", "
