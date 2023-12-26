@@ -11,7 +11,6 @@
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
-const double EPSILON = 1e-6;
 
 string ReadLine() {
     string s;
@@ -84,7 +83,9 @@ public:
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
         for(const string& str:stop_words_){
-            if(!IsValidWord(str))throw invalid_argument("stop_words have banned symbols");
+            if(!IsValidWord(str)){
+                throw invalid_argument("stop_words have banned symbols");
+            }
         }
     }
 
@@ -94,7 +95,12 @@ public:
     }
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
-        if(!IsValidDocument(document_id, document))throw invalid_argument("invalid document");
+        if(document_id<0 || documents_.count(document_id)>0){
+            throw invalid_argument("invalid document id");
+        }
+        if(!IsValidWord(document)){
+            throw invalid_argument("document have banned symbols");
+        }
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
@@ -106,17 +112,15 @@ public:
 
     template <typename DocumentPredicate>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
-        if(!IsValidWord(raw_query))throw invalid_argument("invalid query");
+        if(!IsValidWord(raw_query)){
+            throw invalid_argument("invalid query");
+        }
         const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_predicate);
-
-        for (const string& word : query.minus_words) {
-            if (!IsValidQuery(word)) throw invalid_argument("invalid query");
-        }
-
+        
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
+                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
                      return lhs.rating > rhs.rating;
                  } else {
                      return lhs.relevance > rhs.relevance;
@@ -144,12 +148,13 @@ public:
     }
 
     int GetDocumentId(int index) const {
-        if (index < 0 || index > static_cast<int>(document_id_order_addition_.size()) - 1) throw out_of_range("invalid index");
         return document_id_order_addition_.at(index);
     }
     
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-        if(!IsValidWord(raw_query))throw invalid_argument("invalid query");
+        if(!IsValidWord(raw_query)){
+            throw invalid_argument("query have banned words");
+        }
         const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
@@ -161,7 +166,6 @@ public:
             }
         }
         for (const string& word : query.minus_words) {
-            if (!IsValidQuery(word)) throw invalid_argument("invalid query");
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
@@ -188,16 +192,6 @@ private:
         return none_of(word.begin(), word.end(), [](char c) {
             return c >= '\0' && c < ' ';
         });
-    }
-
-    bool IsValidDocument(const int& id, const string& str){
-        if(id<0 || documents_.count(id)>0)return false;
-        return IsValidWord(str);
-        return true;
-    }
-
-    bool IsValidQuery(const string& str) const{
-        return !(str.empty() || str.at(0) == '-' || str.at(str.size() - 1) == '-');
     }
 
     bool IsStopWord(const string& word) const {
@@ -238,6 +232,9 @@ private:
             is_minus = true;
             text = text.substr(1);
         }
+        if(text.empty() || text[0]=='-'){
+            throw invalid_argument("invalid minus-words in query");
+        }
         return {text, is_minus, IsStopWord(text)};
     }
 
@@ -261,7 +258,6 @@ private:
         return query;
     }
 
-    // Existence required
     double ComputeWordInverseDocumentFreq(const string& word) const {
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
