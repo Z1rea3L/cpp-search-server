@@ -34,27 +34,9 @@ public:
     void AddDocument(int document_id, const string& document, DocumentStatus status,
                      const vector<int>& ratings);
     
-template <typename DocumentPredicate>
-vector<Document> FindTopDocuments(const string& raw_query,
-                                                    DocumentPredicate document_predicate) const {
-    const auto query = ParseQuery(raw_query);
-
-    auto matched_documents = FindAllDocuments(query, document_predicate);
-
-    sort(matched_documents.begin(), matched_documents.end(),
-         [](const Document& lhs, const Document& rhs) {
-             if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                 return lhs.rating > rhs.rating;
-             } else {
-                 return lhs.relevance > rhs.relevance;
-             }
-         });
-    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
-        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
-    }
-
-    return matched_documents;
-}
+    template <typename DocumentPredicate>
+    vector<Document> FindTopDocuments(const string& raw_query,
+                                                    DocumentPredicate document_predicate) const;
 
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const;
 
@@ -138,5 +120,27 @@ vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& query
         matched_documents.push_back(
             {document_id, relevance, documents_.at(document_id).rating});
     }
+    return matched_documents;
+}
+
+template <typename DocumentPredicate>
+vector<Document> SearchServer::FindTopDocuments(const string& raw_query,
+                                                    DocumentPredicate document_predicate) const {
+    const auto query = SearchServer::ParseQuery(raw_query);
+
+    auto matched_documents = SearchServer::FindAllDocuments(query, document_predicate);
+
+    sort(matched_documents.begin(), matched_documents.end(),
+         [](const Document& lhs, const Document& rhs) {
+             if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                 return lhs.rating > rhs.rating;
+             } else {
+                 return lhs.relevance > rhs.relevance;
+             }
+         });
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
+        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+    }
+
     return matched_documents;
 }
