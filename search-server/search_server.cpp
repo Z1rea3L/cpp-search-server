@@ -129,6 +129,7 @@ SearchServer::Query SearchServer::ParseQuery(const string& text) const {
 double SearchServer::ComputeWordInverseDocumentFreq(const string& word) const {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
 }
+
 template <typename DocumentPredicate>
 vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& query,
                                       DocumentPredicate document_predicate) const {
